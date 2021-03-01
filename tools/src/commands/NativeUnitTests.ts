@@ -1,6 +1,8 @@
 import spawnAsync from '@expo/spawn-async';
 import chalk from 'chalk';
+import fs from 'fs-extra';
 import inquirer from 'inquirer';
+import path from 'path';
 
 import * as Directories from '../Directories';
 import * as Packages from '../Packages';
@@ -36,17 +38,40 @@ async function thisAction({
     let errors: any[] = [];
     for (const pkg of packages) {
       if (
-        !pkg.isSupportedOnPlatform('ios') ||
-        !(await pkg.hasNativeTestsAsync('ios')) ||
-        !pkg.podspecName
+        pkg.podspecName !== 'EXSharing' &&
+        (!pkg.isSupportedOnPlatform('ios') ||
+          !(await pkg.hasNativeTestsAsync('ios')) ||
+          !pkg.podspecName)
       ) {
         continue;
       }
       try {
-        await spawnAsync('fastlane', ['test', `scheme:${pkg.podspecName}`], {
-          cwd: Directories.getExpoRepositoryRootDir(),
-          stdio: 'inherit',
-        });
+        // make schemes shared
+
+        const xcodeprojFiles = fs.readdirSync(
+          path.join(Directories.getIosDir(), 'Pods', `${pkg.podspecName}.xcodeproj`)
+        );
+        console.log('xcodeprojFiles directories:', pkg.podspecName, JSON.stringify(xcodeprojFiles));
+        const xcuserdataFiles = fs.readdirSync(
+          path.join(Directories.getIosDir(), 'Pods', `${pkg.podspecName}.xcodeproj`, 'xcuserdata')
+        );
+        console.log('xcuserdata directories:', pkg.podspecName, JSON.stringify(xcuserdataFiles));
+        const xcschemesFiles = fs.readdirSync(
+          path.join(
+            Directories.getIosDir(),
+            'Pods',
+            `${pkg.podspecName}.xcodeproj`,
+            'xcuserdata',
+            xcuserdataFiles[0],
+            'xcschemes'
+          )
+        );
+        console.log('xcschemes files:', pkg.podspecName, JSON.stringify(xcschemesFiles));
+
+        // await spawnAsync('fastlane', ['test', `scheme:${pkg.podspecName}`], {
+        //   cwd: Directories.getExpoRepositoryRootDir(),
+        //   stdio: 'inherit',
+        // });
       } catch (error) {
         errors.push(error);
       }
