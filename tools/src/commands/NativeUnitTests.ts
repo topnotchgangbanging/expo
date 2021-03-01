@@ -46,32 +46,35 @@ async function thisAction({
         continue;
       }
       try {
-        // make schemes shared
+        // make schemes shared by moving them from xcodeproj/xcuserdata/runner.xcuserdatad/xcschemes
+        // to xcodeproj/xcshareddata/xcschemes
+        // otherwise fastlane will default to the Exponent scheme
+        const xcodeprojDir = path.join(
+          Directories.getIosDir(),
+          'Pods',
+          `${pkg.podspecName}.xcodeproj`
+        );
+        const destinationDir = path.join(xcodeprojDir, 'xcshareddata', 'xcschemes');
+        await fs.mkdirp(destinationDir);
 
-        const xcodeprojFiles = fs.readdirSync(
-          path.join(Directories.getIosDir(), 'Pods', `${pkg.podspecName}.xcodeproj`)
-        );
-        console.log('xcodeprojFiles directories:', pkg.podspecName, JSON.stringify(xcodeprojFiles));
-        const xcuserdataFiles = fs.readdirSync(
-          path.join(Directories.getIosDir(), 'Pods', `${pkg.podspecName}.xcodeproj`, 'xcuserdata')
-        );
-        console.log('xcuserdata directories:', pkg.podspecName, JSON.stringify(xcuserdataFiles));
-        const xcschemesFiles = fs.readdirSync(
-          path.join(
-            Directories.getIosDir(),
-            'Pods',
-            `${pkg.podspecName}.xcodeproj`,
-            'xcuserdata',
-            xcuserdataFiles[0],
-            'xcschemes'
-          )
-        );
-        console.log('xcschemes files:', pkg.podspecName, JSON.stringify(xcschemesFiles));
+        // find user directory name, should be runner.xcuserdatad but depends on the OS username
+        const xcuserdataDirName = await fs.readdir(path.join(xcodeprojDir, 'xcuserdata'))[0];
 
-        // await spawnAsync('fastlane', ['test', `scheme:${pkg.podspecName}`], {
-        //   cwd: Directories.getExpoRepositoryRootDir(),
-        //   stdio: 'inherit',
-        // });
+        const xcschemesDir = path.join(xcodeprojDir, 'xcuserdata', xcuserdataDirName, 'xcschemes');
+        const xcschemesFiles = (await fs.readdir(xcschemesDir)).filter((file) =>
+          file.endsWith('.xcscheme')
+        );
+        if (!xcschemesFiles.length) {
+          throw new Error(`No scheme could be found to run tests for ${pkg.podspecName}`);
+        }
+        for (const file of xcschemesFiles) {
+          await fs.move(path.join(xcschemesDir, file), path.join(destinationDir, file));
+        }
+
+        await spawnAsync('fastlane', ['test', `scheme:${pkg.podspecName}`], {
+          cwd: Directories.getExpoRepositoryRootDir(),
+          stdio: 'inherit',
+        });
       } catch (error) {
         errors.push(error);
       }
